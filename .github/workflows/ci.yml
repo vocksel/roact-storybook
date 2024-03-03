@@ -12,8 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: Roblox/setup-foreman@v1
+      - uses: Roblox/setup-foreman@v3
         with:
+          allow-external-github-orgs: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lint
@@ -46,8 +47,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: Roblox/setup-foreman@v1
+      - uses: Roblox/setup-foreman@v3
         with:
+          allow-external-github-orgs: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install dependencies
@@ -70,52 +72,155 @@ jobs:
               fi
           done
 
-  # Running unit tests in CI has historically been cumbersome, and presently
-  # there is no way to run Roblox Studio from a GitHub workflow. As such, our
-  # job for tests has been commented out so we can get the nice green checkmark
-  # in CI again
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
 
-  # tests:
-  #   runs-on: windows-latest
-  #   timeout-minutes: 10
-  #   steps:
-  #     - uses: actions/checkout@v3
+      - name: Check for ROBLOSECURITY secret
+        shell: bash
+        run: ./.github/workflows/validate-secret.sh ROBLOSECURITY "${{ secrets.ROBLOSECURITY }}"
 
-  #     - name: Check for ROBLOSECURITY token
-  #       shell: bash
-  #       run: ./.github/workflows/validate-secret.sh ROBLOSECURITY "${{ secrets.ROBLOSECURITY }}"
+      - name: Check for MULLVAD_ACCOUNT secret
+        shell: bash
+        run: ./.github/workflows/validate-secret.sh MULLVAD_ACCOUNT "${{ secrets.MULLVAD_ACCOUNT }}"
 
-  #     - name: Check for RBXID token
-  #       shell: bash
-  #       run: ./.github/workflows/validate-secret.sh RBXID "${{ secrets.RBXID }}"
+      - uses: Roblox/setup-foreman@v3
+        with:
+          allow-external-github-orgs: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-  #     - uses: Roblox/setup-foreman@v1
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install dependencies
+        run: wally install
 
-  #     - name: Install dependencies
-  #       run: wally install
+      - name: Build place file
+        run: rojo build dev.project.json -o studio-tests.rbxl
 
-  #     - name: Build place file
-  #       run: rojo build dev.project.json -o studio-tests.rbxl
+      - name: Install Mullvad
+        run: choco install mullvad-app
 
-  #     - name: Install Roblox Studio
-  #       run:
-  #         Invoke-WebRequest -Uri "https://github.com/OrbitalOwen/roblox-win-installer/archive/0.5.zip" -OutFile roblox-win-installer.zip;
-  #         Expand-Archive -LiteralPath roblox-win-installer.zip -DestinationPath .;
-  #         cd roblox-win-installer-0.5;
-  #         pip install --requirement requirements.txt;
-  #         python install.py "${{ secrets.ROBLOSECURITY }}"
+      - name: Update path with Mullvad executable
+        shell: bash
+        run: |
+          BIN="/c/Program Files/Mullvad VPN/resources"
+          echo "$BIN" >> $GITHUB_PATH
 
-  #     - name: Create flag overrides for successful login
-  #       run: |
-  #         $flags = @{DFIntStudioUseNewLoginDataEndpointHundredthPercent=0; FFlagStudioUseNewLoginDataEndpoint=$false}
-  #         New-Item -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/' -Name "ClientSettings" -ItemType "directory"
-  #         New-Item -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/ClientSettings' -Name "ClientAppSettings.json"
-  #         $flags | ConvertTo-Json -depth 32| set-content -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/ClientSettings/ClientAppSettings.json'
+      - name: Login to Mullvad account
+        shell: bash
+        run: mullvad account login ${{ secrets.MULLVAD_ACCOUNT }}
 
-  #     - name: Add RBXID to the Windows registry
-  #       run: REG ADD HKCU\Software\RobloxStudioBrowser\roblox.com /t REG_SZ /v .RBXID /d "${{ secrets.RBXID }}"
+      - name: Set server to connect to
+        shell: bash
+        run: mullvad relay set location us-sjc-wg-001
 
-  #     - name: Run tests
-  #       run: run-in-roblox --place studio-tests.rbxl --script tests/init.server.lua
+      - name: Export IP before connecting to VPN
+        shell: bash
+        run: |
+          ip=$(curl -s https://httpbin.org/ip | jq -r .origin)
+          echo "Current IP address: $ip"
+          echo "RUNNER_IP=$ip" >> $GITHUB_ENV
+
+      - name: Connect to VPN
+        shell: bash
+        run: mullvad connect
+
+      - name: Export device name
+        shell: bash
+        run: |
+          deviceName=$(mullvad account get | grep  "Device name" | cut -d : -f 2 | xargs)
+          echo "Device name: $deviceName"
+          echo "DEVICE_NAME=$deviceName" >> $GITHUB_ENV
+
+      - name: Poll for IP change
+        uses: nick-fields/retry@v2.8.3
+        with:
+          max_attempts: 5
+          timeout_minutes: 2
+          retry_wait_seconds: 2
+          shell: bash
+          command: |
+            ip=$(curl -s https://httpbin.org/ip | jq -r .origin)
+
+            echo "Original IP: ${{ env.RUNNER_IP }}"
+            echo "Current IP: $ip"
+
+            if [[ $ip != "" && "${{ env.RUNNER_IP }}" != "$ip" ]]; then
+              echo "IP changed, assuming we're connected now to the VPN"
+              exit 0
+            else
+              echo "IP has not changed yet. Retrying...."
+              exit 1
+            fi
+
+      - name: Log Mullvad status
+        shell: bash
+        run: mullvad status -v
+
+      - name: List tokens
+        shell: bash
+        run: cmdkey /list:"LegacyGeneric:target=https://www.roblox.com:RobloxStudioAuth*"
+
+      - name: Set .ROBLOSECURITY token
+        # shell: bash
+        run: cmdkey /generic:"LegacyGeneric:target=https://www.roblox.com:RobloxStudioAuth.ROBLOSECURITY1343930" /user:"Roblox" /pass:"${{ secrets.ROBLOSECURITY }}"
+
+      - name: Set Cookies token
+        # shell: bash
+        run: cmdkey /generic:"LegacyGeneric:target=https://www.roblox.com:RobloxStudioAuthCookies1343930" /user:"Roblox" /pass:".ROBLOSECURITY"
+
+      - name: List tokens
+        shell: bash
+        run: cmdkey /list:"LegacyGeneric:target=https://www.roblox.com:RobloxStudioAuth*"
+
+      - uses: actions/checkout@v3
+        with:
+          repository: vocksel/roblox-win-installer
+          path: roblox-win-installer
+
+      - name: Install Roblox Studio
+        shell: bash
+        run: |
+          cd roblox-win-installer
+          pip install --requirement requirements.txt;
+          python install.py "${{ secrets.ROBLOSECURITY }}"
+
+      - name: Create flag overrides for successful login
+        run: |
+          $flags = @{FFlagSTUDIOPLAT31379MultiAccountCookies3=$true; FLogAuthTokenManager=$true; FLogError=$true; FLogFirstTimeLoggedInUtil=$true; FLogKeyValueStorage=$true; FLogLoginController=$true; FLogLoginTelemetry=$true; FLogMultiUserKeyValueStorage=$true; FLogStudioCookieManager=$true;}
+          New-Item -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/' -Name "ClientSettings" -ItemType "directory"
+          New-Item -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/ClientSettings' -Name "ClientAppSettings.json"
+          $flags | ConvertTo-Json -depth 32| set-content -Path 'C:/Program Files (x86)/Roblox/Versions/version-*/ClientSettings/ClientAppSettings.json'
+
+      # - name: Open Studio
+      #   shell: bash
+      #   run: |
+      #     STUDIO=$(find "/c/Program Files (x86)/Roblox" -type f -name "RobloxStudio.exe")
+      #     echo $STUDIO
+      #     start $STUDIO
+
+      - name: Run tests
+        run: run-in-roblox --place studio-tests.rbxl --script tests/init.server.lua
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Upload screenshot
+        if: failure()
+        uses: OrbitalOwen/desktop-screenshot-action@0.1
+        with:
+          file-name: 'roblox-studio-${{ github.run_id }}.jpg'
+
+      - name: Disconnect from VPN
+        if: always()
+        shell: bash
+        run: |
+          mullvad disconnect
+          mullvad account revoke-device "${{ env.DEVICE_NAME }}"
+
+      - name: Dump logs
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: studio-logs
+          path: |
+            ~/AppData/Local/Roblox/logs/**/*
