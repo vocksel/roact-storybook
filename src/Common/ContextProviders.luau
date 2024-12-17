@@ -1,10 +1,11 @@
 local React = require("@pkg/React")
-local TreeView = require("@root/TreeView")
 
 local ContextStack = require("@root/Common/ContextStack")
 local NavigationContext = require("@root/Navigation/NavigationContext")
 local PluginContext = require("@root/Plugin/PluginContext")
+local Popover = require("@root/Popover")
 local SettingsContext = require("@root/UserSettings/SettingsContext")
+local TreeView = require("@root/TreeView")
 
 export type Props = {
 	plugin: Plugin,
@@ -22,6 +23,7 @@ local function ContextProviders(props: Props)
 			}),
 			React.createElement(SettingsContext.Provider),
 			React.createElement(TreeView.TreeViewProvider),
+			React.createElement(Popover.Provider),
 		},
 	}, props.children)
 end

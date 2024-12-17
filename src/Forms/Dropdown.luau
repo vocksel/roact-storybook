@@ -1,3 +1,4 @@
+local Popover = require("@root/Popover")
 local React = require("@pkg/React")
 local useTheme = require("@root/Common/useTheme")
 
@@ -44,58 +45,66 @@ local function Dropdown(props: Props)
 
 	local maxHeight = theme.buttonTextSize + (theme.paddingSmall.Offset * 2)
 
-	return React.createElement("TextButton", {
-		Text = tostring(if selectedOption then selectedOption else props.placeholder),
-		Font = theme.buttonFont,
-		TextSize = theme.buttonTextSize,
-		TextColor3 = theme.buttonText,
-		BackgroundColor3 = theme.button,
-		Size = UDim2.fromOffset(0, maxHeight),
-		AutomaticSize = Enum.AutomaticSize.X,
-		[React.Event.Activated] = function()
-			setIsExpanded(not isExpanded)
-		end,
+	return React.createElement(Popover.Root, {
+		isOpen = isExpanded,
 	}, {
-		Corner = React.createElement("UICorner", {
-			CornerRadius = theme.corner,
+		Anchor = React.createElement(Popover.Anchor, nil, {
+			React.createElement("TextButton", {
+				Text = tostring(if selectedOption then selectedOption else props.placeholder),
+				Font = theme.buttonFont,
+				TextSize = theme.buttonTextSize,
+				TextColor3 = theme.buttonText,
+				BackgroundColor3 = theme.button,
+				Size = UDim2.fromOffset(0, maxHeight),
+				AutomaticSize = Enum.AutomaticSize.X,
+				[React.Event.Activated] = function()
+					setIsExpanded(not isExpanded)
+				end,
+			}, {
+				Corner = React.createElement("UICorner", {
+					CornerRadius = theme.corner,
+				}),
+
+				Border = React.createElement("UIStroke", {
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Color = theme.buttonText,
+					Transparency = 0.6,
+					Thickness = 1,
+				}),
+
+				Padding = React.createElement("UIPadding", {
+					PaddingTop = theme.paddingSmall,
+					PaddingRight = theme.padding,
+					PaddingBottom = theme.paddingSmall,
+					PaddingLeft = theme.padding,
+				}),
+			}),
 		}),
 
-		Border = React.createElement("UIStroke", {
-			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-			Color = theme.buttonText,
-			Transparency = 0.6,
-			Thickness = 1,
-		}),
+		Content = React.createElement(Popover.Content, nil, {
+			React.createElement("Frame", {
+				Position = UDim2.fromScale(0, 1),
+				BackgroundColor3 = theme.button,
+				AutomaticSize = Enum.AutomaticSize.XY,
+			}, {
+				Layout = React.createElement("UIListLayout", {
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				}),
 
-		Padding = React.createElement("UIPadding", {
-			PaddingTop = theme.paddingSmall,
-			PaddingRight = theme.padding,
-			PaddingBottom = theme.paddingSmall,
-			PaddingLeft = theme.padding,
-		}),
+				Corner = React.createElement("UICorner", {
+					CornerRadius = theme.corner,
+				}),
 
-		Options = isExpanded and React.createElement("Frame", {
-			Position = UDim2.fromScale(0, 1),
-			BackgroundColor3 = theme.button,
-			AutomaticSize = Enum.AutomaticSize.XY,
-		}, {
-			Layout = React.createElement("UIListLayout", {
-				SortOrder = Enum.SortOrder.LayoutOrder,
-				HorizontalAlignment = Enum.HorizontalAlignment.Center,
+				Border = React.createElement("UIStroke", {
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Color = theme.buttonText,
+					Transparency = 0.6,
+					Thickness = 1,
+				}),
+
+				Options = React.createElement(React.Fragment, nil, options),
 			}),
-
-			Corner = React.createElement("UICorner", {
-				CornerRadius = theme.corner,
-			}),
-
-			Border = React.createElement("UIStroke", {
-				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-				Color = theme.buttonText,
-				Transparency = 0.6,
-				Thickness = 1,
-			}),
-
-			Options = React.createElement(React.Fragment, nil, options),
 		}),
 	})
 end
