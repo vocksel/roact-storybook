@@ -6,18 +6,17 @@ local ScrollingFrame = require("@root/Common/ScrollingFrame")
 local nextLayoutOrder = require("@root/Common/nextLayoutOrder")
 local useTheme = require("@root/Common/useTheme")
 
-type LoadedStory<T> = Storyteller.LoadedStory<T>
+type UnavailableStorybook = Storyteller.UnavailableStorybook
 
 export type Props = {
-	err: string,
-	storyModule: ModuleScript,
+	unavailableStorybook: UnavailableStorybook,
 	layoutOrder: number?,
 }
 
-local function StoryError(props: Props)
+local function StorybookError(props: Props)
 	local theme = useTheme()
 
-	local storySource = if props.storyModule then props.storyModule.Source else nil
+	local storybookSource = props.unavailableStorybook.storybook.source.Source
 
 	return React.createElement(ScrollingFrame, {
 		ScrollingDirection = Enum.ScrollingDirection.XY,
@@ -38,7 +37,7 @@ local function StoryError(props: Props)
 
 		MainText = React.createElement("TextLabel", {
 			LayoutOrder = nextLayoutOrder(),
-			Text = `Failed to load {props.storyModule.Name}`,
+			Text = `Failed to load {props.unavailableStorybook.storybook.name}`,
 			AutomaticSize = Enum.AutomaticSize.XY,
 			BackgroundTransparency = 1,
 			Font = theme.font,
@@ -72,43 +71,41 @@ local function StoryError(props: Props)
 			}),
 
 			CodeBlock = React.createElement(CodeBlock, {
-				source = props.err,
+				source = props.unavailableStorybook.problem,
 				sourceColor = theme.alert,
 				layoutOrder = nextLayoutOrder(),
 			}),
 		}),
 
-		StorySource = if storySource
-			then React.createElement("Frame", {
+		StorybookSource = React.createElement("Frame", {
+			AutomaticSize = Enum.AutomaticSize.XY,
+			BackgroundTransparency = 1,
+			LayoutOrder = nextLayoutOrder(),
+		}, {
+			Layout = React.createElement("UIListLayout", {
+				SortOrder = Enum.SortOrder.LayoutOrder,
+				FillDirection = Enum.FillDirection.Vertical,
+				Padding = theme.padding,
+			}),
+
+			Title = React.createElement("TextLabel", {
+				LayoutOrder = nextLayoutOrder(),
+				Text = "Storybook Source",
 				AutomaticSize = Enum.AutomaticSize.XY,
 				BackgroundTransparency = 1,
-				LayoutOrder = nextLayoutOrder(),
-			}, {
-				Layout = React.createElement("UIListLayout", {
-					SortOrder = Enum.SortOrder.LayoutOrder,
-					FillDirection = Enum.FillDirection.Vertical,
-					Padding = theme.padding,
-				}),
+				Font = theme.headerFont,
+				TextColor3 = theme.text,
+				TextSize = theme.headerTextSize,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextYAlignment = Enum.TextYAlignment.Center,
+			}),
 
-				Title = React.createElement("TextLabel", {
-					LayoutOrder = nextLayoutOrder(),
-					Text = "Story Source",
-					AutomaticSize = Enum.AutomaticSize.XY,
-					BackgroundTransparency = 1,
-					Font = theme.headerFont,
-					TextColor3 = theme.text,
-					TextSize = theme.headerTextSize,
-					TextXAlignment = Enum.TextXAlignment.Left,
-					TextYAlignment = Enum.TextYAlignment.Center,
-				}),
-
-				CodeBlock = React.createElement(CodeBlock, {
-					source = storySource,
-					layoutOrder = nextLayoutOrder(),
-				}),
-			})
-			else nil,
+			CodeBlock = React.createElement(CodeBlock, {
+				source = storybookSource,
+				layoutOrder = nextLayoutOrder(),
+			}),
+		}),
 	})
 end
 
-return StoryError
+return StorybookError
